@@ -255,22 +255,30 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   #read-lap b { font-weight: 700; color: var(--gold-bright); }
+  /* the bar is draggable: a generous invisible hit zone wraps the thin track */
+  #read-bar-hit {
+    margin: 2px -8px -8px;
+    padding: 6px 8px 10px;
+    cursor: pointer;
+    touch-action: none;
+  }
   #read-bar {
-    margin-top: 8px; height: 5px;
-    border-radius: 3px; background: rgba(250, 245, 232, 0.15); overflow: hidden;
+    height: 7px;
+    border-radius: 4px; background: rgba(250, 245, 232, 0.15); overflow: hidden;
   }
   #read-bar i {
-    display: block; height: 100%; border-radius: 3px;
+    display: block; height: 100%; border-radius: 4px;
     background: linear-gradient(90deg, var(--gold-deep), var(--gold-bright));
     transition: width .25s ease;
   }
+  #read-bar.dragging i { transition: none; }
   /* minimized: just the count and the bar on one slim strip */
   #read-progress.mini { padding: 7px 38px 9px 18px; }
   #read-progress.mini #rp-info { display: none; }
   #read-progress.mini #read-count { font-size: 19px; }
   #read-progress.mini #read-count .of { font-size: 14px; }
   #read-progress.mini #rp-row { justify-content: center; }
-  #read-progress.mini #read-bar { margin-top: 5px; }
+  #read-progress.mini #read-bar-hit { margin-top: 0; }
 
   /* mushaf-style paper */
   #ayah-scroll {
@@ -632,7 +640,7 @@
         <div class="label" id="read-lap"></div>
       </div>
     </div>
-    <div id="read-bar"><i></i></div>
+    <div id="read-bar-hit"><div id="read-bar"><i></i></div></div>
   </div>
   <div id="ayah-scroll"></div>
   <div id="tapbar">
@@ -1224,10 +1232,51 @@
   /* ================= PROGRESS PANEL MINIMIZE ================= */
   const rp = $('read-progress');
   if (localStorage.getItem('rp-mini') === '1') rp.classList.add('mini');
-  rp.addEventListener('click', () => {
+  rp.addEventListener('click', (e) => {
+    if (e.target.closest('#read-bar-hit')) return;   // bar drags must not toggle the panel
     rp.classList.toggle('mini');
-    try { localStorage.setItem('rp-mini', rp.classList.contains('mini') ? '1' : '0'); } catch (e) {}
+    try { localStorage.setItem('rp-mini', rp.classList.contains('mini') ? '1' : '0'); } catch (e2) {}
   });
+
+  /* ================= DRAG THE BAR TO SET TODAY'S COUNT ================= */
+  (() => {
+    const hit = $('read-bar-hit');
+    const bar = $('read-bar');
+    let dragging = false;
+
+    const setFromX = (clientX) => {
+      if (!current) return;
+      const rect = bar.getBoundingClientRect();
+      const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      const n = Math.round(frac * current.target);
+      const k = todayKey();
+      wird.progress[k] = wird.progress[k] || {};
+      if ((wird.progress[k][current.id] || 0) !== n) {
+        wird.progress[k][current.id] = n;
+        vibrate(5);
+        renderReadProgress();
+      }
+    };
+
+    hit.addEventListener('pointerdown', (e) => {
+      if (!current) return;
+      dragging = true;
+      bar.classList.add('dragging');
+      try { hit.setPointerCapture(e.pointerId); } catch (e2) {}
+      setFromX(e.clientX);
+      e.stopPropagation();
+    });
+    hit.addEventListener('pointermove', (e) => { if (dragging) setFromX(e.clientX); });
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      bar.classList.remove('dragging');
+      saveWird();   // also refreshes the reminder mirror ("done" state may have changed)
+    };
+    hit.addEventListener('pointerup', endDrag);
+    hit.addEventListener('pointercancel', endDrag);
+    hit.addEventListener('click', (e) => e.stopPropagation());
+  })();
 
   /* ================= FREE COUNTER (stopwatch) ================= */
   const STORE_KEY = 'tap-counter-v1';
