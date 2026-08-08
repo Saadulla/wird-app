@@ -869,12 +869,46 @@
   const subLabel = (item) => item.target + '× daily' + (item.remind ? ' · ⏰ ' + item.remind : '');
 
   /* ================= VIEWS ================= */
+
+  // Keep the display on while a wird is open — during auto-reading nothing is
+  // touched for minutes at a time, so the phone would otherwise sleep mid-ayah.
+  // The OS drops the lock whenever the page is hidden, so it is re-taken on
+  // visibilitychange below.
+  let wakeLock = null;
+  let wakeLockPending = false;
+  async function acquireWakeLock() {
+    // `pending` matters: opening a wird fires setView twice in the same tick, and
+    // without it both calls would pass the guard and strand a second, unreleasable lock
+    if (!('wakeLock' in navigator) || wakeLock || wakeLockPending) return;
+    wakeLockPending = true;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      // the view may have changed while the request was in flight
+      if (document.body.dataset.view !== 'read' || document.visibilityState !== 'visible') {
+        lock.release().catch(() => {});
+        return;
+      }
+      wakeLock = lock;
+      lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
+    } catch (e) {
+      // denied (low battery) or unsupported — reading still works, screen just dims
+    } finally {
+      wakeLockPending = false;
+    }
+  }
+  function releaseWakeLock() {
+    if (!wakeLock) return;
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+
   const setView = (v) => {
     document.body.dataset.view = v;
     for (const el of document.querySelectorAll('.view')) el.classList.remove('active');
     $('view-' + v).classList.add('active');
     $('tab-list').classList.toggle('active', v === 'list');
     $('tab-counter').classList.toggle('active', v === 'counter');
+    if (v === 'read') acquireWakeLock(); else releaseWakeLock();
   };
   $('tab-list').addEventListener('click', () => { renderList(); setView('list'); });
   $('tab-counter').addEventListener('click', () => setView('counter'));
@@ -1360,10 +1394,12 @@
     if (document.visibilityState === 'hidden') {
       if (playing) stopPlay();   // don't auto-count while the app is in the background
       if (runStart) { saveCounter(); stopTimer(); renderCounter(); }
+      releaseWakeLock();         // the OS drops it anyway; keep our handle in sync
     } else {
       // date may have rolled over while backgrounded
       if (document.body.dataset.view === 'list') renderList();
       else if (document.body.dataset.view === 'read' && current) renderReadProgress();
+      if (document.body.dataset.view === 'read') acquireWakeLock();
     }
   });
   window.addEventListener('pagehide', () => { if (runStart) saveCounter(); });

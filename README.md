@@ -19,6 +19,9 @@ Quran verses and adhkar you read a set number of times each day.
   text word by word (40–700 words/min, adjustable). When the highlight finishes
   the text, one reading is counted automatically and the cycle restarts until
   the daily target is done. Hold your finger on the text to pause; release to resume.
+- **Screen stays awake** — while a wird is open the display is held on, so the
+  phone never sleeps mid-ayah during auto-reading. The lock is dropped as soon
+  as you leave the reading view. Requires an HTTPS (or `localhost`) origin.
 - **Streaks & goals** — "Day 12 of 40 🌙" day-goals, streak tracking with
   editable starting streak, and a congrats screen (تَقَبَّلَ ٱللَّهُ مِنكُم)
   when you finish.
