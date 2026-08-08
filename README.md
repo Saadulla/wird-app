@@ -22,6 +22,12 @@ Quran verses and adhkar you read a set number of times each day.
 - **Screen stays awake** — while a wird is open the display is held on, so the
   phone never sleeps mid-ayah during auto-reading. The lock is dropped as soon
   as you leave the reading view. Requires an HTTPS (or `localhost`) origin.
+- **Your own recitation** — attach an MP3 to any wird (Edit → *Voice recording*).
+  Press ▶ and the voice becomes the clock: the word marker is pinned to the
+  audio's own position, so it follows the reciter instead of a fixed words/min.
+  One reading is counted each time the audio finishes, and it loops until the
+  daily target is done. A speed button beside ▶ cycles 0.5× – 2× and is
+  remembered per wird. Audio is stored offline in IndexedDB, never uploaded.
 - **Streaks & goals** — "Day 12 of 40 🌙" day-goals, streak tracking with
   editable starting streak, and a congrats screen (تَقَبَّلَ ٱللَّهُ مِنكُم)
   when you finish.

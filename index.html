@@ -338,6 +338,20 @@
     background: linear-gradient(180deg, var(--gold-bright), var(--gold));
     border-color: var(--gold-bright);
   }
+  /* voice speed — only shown for wirds that have an audio file */
+  #speed-btn {
+    width: 66px; height: 84px; flex-shrink: 0;
+    font-family: inherit; font-weight: 700; font-size: 16px; line-height: 1;
+    color: var(--gold-bright);
+    background: linear-gradient(180deg, var(--green-800), var(--green-900));
+    border: 2px solid var(--gold);
+    border-radius: 22px;
+    box-shadow: 0 8px 22px rgba(11, 61, 46, 0.4);
+    cursor: pointer;
+    transition: transform .06s;
+  }
+  #speed-btn:active { transform: scale(0.94); }
+  #speed-btn[hidden] { display: none; }
   #tap-btn {
     flex: 1; height: 84px;
     font-family: inherit; font-weight: 700; font-size: 19px;
@@ -444,6 +458,32 @@
     cursor: pointer;
   }
   .btn-danger:active { border-color: #ff8d7a; background: rgba(255, 141, 122, 0.1); }
+
+  /* voice file picker */
+  #audio-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #f-audio { display: none; }
+  .file-btn {
+    font-family: inherit; font-weight: 700; font-size: 15px;
+    color: var(--green-950);
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+    border: 0; border-radius: 999px; padding: 11px 18px;
+    cursor: pointer; transition: transform .1s;
+  }
+  .file-btn:active { transform: scale(0.97); }
+  #f-audio-name {
+    flex: 1; min-width: 110px;
+    text-transform: none; letter-spacing: 0.02em;
+    color: var(--ivory); font-size: 14px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #f-audio-clear {
+    font-family: inherit; font-size: 13px;
+    color: #ffb4a3; background: none;
+    border: 1px solid rgba(255, 141, 122, 0.4);
+    border-radius: 999px; padding: 9px 14px;
+    cursor: pointer;
+  }
+  #f-audio-clear[hidden] { display: none; }
 
   /* settings sample text */
   #fs-sample {
@@ -646,6 +686,7 @@
   <div id="tapbar">
     <div class="tapbar-row">
       <button id="play-btn" type="button" title="Auto reading">▶</button>
+      <button id="speed-btn" type="button" title="Voice speed" hidden>1×</button>
       <button id="tap-btn" type="button"></button>
     </div>
   </div>
@@ -678,6 +719,15 @@
     <div class="field">
       <span class="label">Days already completed — sets your streak</span>
       <input type="number" id="f-streak" min="0" max="398" value="0" inputmode="numeric">
+    </div>
+    <div class="field">
+      <span class="label">Voice recording (optional)</span>
+      <div id="audio-row">
+        <label class="file-btn" for="f-audio">Choose MP3</label>
+        <input type="file" id="f-audio" accept="audio/*">
+        <span class="label" id="f-audio-name">No voice file</span>
+        <button type="button" id="f-audio-clear" hidden>Remove</button>
+      </div>
     </div>
     <div class="field">
       <span class="label">Daily reminder time (optional)</span>
@@ -866,7 +916,9 @@
   }
   const fanfare = () => { beep(660); beep(880, 0.1); beep(1180, 0.2); };
 
-  const subLabel = (item) => item.target + '× daily' + (item.remind ? ' · ⏰ ' + item.remind : '');
+  const subLabel = (item) => item.target + '× daily'
+    + (item.audioName ? ' · 🎙' : '')
+    + (item.remind ? ' · ⏰ ' + item.remind : '');
 
   /* ================= VIEWS ================= */
 
@@ -908,7 +960,7 @@
     $('view-' + v).classList.add('active');
     $('tab-list').classList.toggle('active', v === 'list');
     $('tab-counter').classList.toggle('active', v === 'counter');
-    if (v === 'read') acquireWakeLock(); else releaseWakeLock();
+    if (v === 'read') { acquireWakeLock(); } else { releaseWakeLock(); releaseAudio(); }
   };
   $('tab-list').addEventListener('click', () => { renderList(); setView('list'); });
   $('tab-counter').addEventListener('click', () => setView('counter'));
@@ -999,6 +1051,7 @@
     updateLap();
 
     stopPlay();
+    loadAudioFor(item);
     const scroll = $('ayah-scroll');
     scroll.innerHTML = '';
     const paras = (item.text || '').split(/\n+/).filter((p) => p.trim());
@@ -1037,37 +1090,126 @@
     for (const w of wordEls) w.classList.remove('hl', 'read');
     hlIdx = 0;
   }
-  function stepHl() {
+  // moves the marker on by one word; false once the whole text has been swept
+  function advanceHl() {
     if (hlIdx > 0 && wordEls[hlIdx - 1]) {
       wordEls[hlIdx - 1].classList.remove('hl');
       wordEls[hlIdx - 1].classList.add('read');
     }
-    if (hlIdx >= wordEls.length) {
-      // one full reading finished → count it automatically
-      clearHl();
-      doTap();
-      if ($('congrats').classList.contains('show')) stopPlay();
-      return;
-    }
+    if (hlIdx >= wordEls.length) return false;
     const w = wordEls[hlIdx];
     w.classList.add('hl');
     if (hlIdx % 3 === 0) w.scrollIntoView({ block: 'center', behavior: 'smooth' });
     hlIdx++;
+    return true;
   }
+  function stepHl() {
+    if (!advanceHl()) {
+      // one full reading finished → count it automatically
+      clearHl();
+      doTap();
+      if ($('congrats').classList.contains('show')) stopPlay();
+    }
+  }
+
+  /* ---- voice: when a wird has an MP3 the recitation becomes the clock. The
+     marker is pinned to the audio's own currentTime rather than run off a
+     timer, so changing speed mid-listen can never drift the two apart. ---- */
+  const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+  const rateOf = (item) => (item && RATES.includes(+item.rate) ? +item.rate : 1);
+  const audioKey = (id) => 'audio-' + id;
+  let audioEl = null;
+  let audioUrl = null;
+  let hlRaf = null;
+
+  function releaseAudio() {
+    if (hlRaf) { cancelAnimationFrame(hlRaf); hlRaf = null; }
+    if (audioEl) { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); audioEl = null; }
+    if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = null; }
+  }
+
+  // the marker's fade should last one word's worth of audio, not the wpm setting
+  function applyAudioWordMs() {
+    if (!audioEl || !wordEls.length) return;
+    const d = audioEl.duration;
+    if (!d || !isFinite(d)) return;
+    const ms = Math.max(40, Math.round(d * 1000 / wordEls.length / audioEl.playbackRate));
+    $('ayah-scroll').style.setProperty('--wms', ms + 'ms');
+  }
+
+  async function loadAudioFor(item) {
+    releaseAudio();
+    updateSpeedBtn();
+    if (!item || !item.audioName) return;
+    const blob = await idbGet(audioKey(item.id));
+    if (!blob || current !== item) return;   // the user moved on while it loaded
+    audioUrl = URL.createObjectURL(blob);
+    audioEl = new Audio(audioUrl);
+    audioEl.preload = 'auto';
+    audioEl.playbackRate = rateOf(item);
+    if ('preservesPitch' in audioEl) audioEl.preservesPitch = true;
+    audioEl.addEventListener('loadedmetadata', applyAudioWordMs);
+    audioEl.addEventListener('ended', onAudioEnded);
+    updateSpeedBtn();
+  }
+
+  function onAudioEnded() {
+    clearHl();
+    doTap(true);
+    if (!playing || $('congrats').classList.contains('show')) { stopPlay(); return; }
+    audioEl.currentTime = 0;   // loop until the daily target is reached
+    audioEl.play().catch(() => stopPlay());
+  }
+
+  function syncHlToAudio() {
+    hlRaf = requestAnimationFrame(syncHlToAudio);
+    if (!audioEl || !wordEls.length) return;
+    const d = audioEl.duration;
+    if (!d || !isFinite(d)) return;
+    const target = Math.min(wordEls.length, Math.floor(audioEl.currentTime / d * wordEls.length) + 1);
+    while (hlIdx < target && advanceHl()) {}
+  }
+
+  function updateSpeedBtn() {
+    const btn = $('speed-btn');
+    const has = !!(current && current.audioName);
+    btn.hidden = !has;
+    if (has) btn.textContent = rateOf(current) + '×';
+  }
+
+  $('speed-btn').addEventListener('click', () => {
+    if (!current) return;
+    current.rate = RATES[(RATES.indexOf(rateOf(current)) + 1) % RATES.length];
+    saveWird();
+    updateSpeedBtn();
+    if (audioEl) { audioEl.playbackRate = current.rate; applyAudioWordMs(); }
+    vibrate(8);
+  });
+
   function startPlay() {
     wordEls = [...document.querySelectorAll('#ayah-scroll .w')];
     if (!wordEls.length) return;
     playing = true;
     $('play-btn').textContent = '⏸';
     $('play-btn').classList.add('playing');
-    const ms = Math.round(60000 / hlWpm);
-    $('ayah-scroll').style.setProperty('--wms', ms + 'ms');
     clearHl();
-    stepHl();
-    hlTimer = setInterval(stepHl, ms);
+    if (audioEl) {
+      audioEl.playbackRate = rateOf(current);
+      audioEl.currentTime = 0;
+      applyAudioWordMs();
+      audioEl.play().catch(() => stopPlay());
+      hlRaf = requestAnimationFrame(syncHlToAudio);
+    } else {
+      const ms = Math.round(60000 / hlWpm);
+      $('ayah-scroll').style.setProperty('--wms', ms + 'ms');
+      stepHl();
+      hlTimer = setInterval(stepHl, ms);
+    }
   }
   function stopPlay() {
     if (hlTimer) { clearInterval(hlTimer); hlTimer = null; }
+    if (hlRaf) { cancelAnimationFrame(hlRaf); hlRaf = null; }
+    if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; }
     if (playing) clearHl();
     playing = false;
     holdPaused = false;
@@ -1079,22 +1221,25 @@
   // hold-to-pause: finger down on the text freezes the highlight, lifting resumes
   let holdPaused = false;
   function suspendPlay() {
-    if (playing && hlTimer) {
-      clearInterval(hlTimer);
-      hlTimer = null;
-      holdPaused = true;
-    }
+    if (!playing || holdPaused) return;
+    if (audioEl) { audioEl.pause(); holdPaused = true; return; }
+    if (hlTimer) { clearInterval(hlTimer); hlTimer = null; holdPaused = true; }
   }
   function resumePlay() {
-    if (playing && holdPaused && !hlTimer) {
-      hlTimer = setInterval(stepHl, Math.round(60000 / hlWpm));
+    if (playing && holdPaused) {
+      if (audioEl) audioEl.play().catch(() => {});
+      else if (!hlTimer) hlTimer = setInterval(stepHl, Math.round(60000 / hlWpm));
     }
     holdPaused = false;
   }
 
-  function doTap() {
+  function doTap(fromAudio) {
     if (!current || $('congrats').classList.contains('show')) return;
-    if (playing) clearHl();   // a tap starts a fresh reading, so the highlight restarts
+    if (playing) {
+      clearHl();   // a tap starts a fresh reading, so the highlight restarts
+      // ...and so does the recitation, unless the audio itself just ended
+      if (!fromAudio && audioEl) { audioEl.currentTime = 0; audioEl.play().catch(() => {}); }
+    }
     const now = Date.now();
     lastLap = now - lapStart;
     lapStart = now;
@@ -1114,7 +1259,8 @@
       beep(880);
     }
   }
-  $('tap-btn').addEventListener('pointerdown', doTap);
+  // wrapped, not passed directly: the event object would look like `fromAudio`
+  $('tap-btn').addEventListener('pointerdown', () => doTap());
 
   // tapping the text counts; holding a finger on it pauses playback until release
   (() => {
@@ -1162,8 +1308,43 @@
 
   const autoName = () => $('f-text').value.trim().split(/\s+/).slice(0, 3).join(' ');
 
+  // audio is only written to IndexedDB on save, so the form holds the intent
+  let pendingAudio = null;   // a File the user just picked
+  let clearAudio = false;    // the user removed the existing recording
+
+  function renderAudioField() {
+    const name = pendingAudio ? pendingAudio.name
+      : (!clearAudio && editing && editing.audioName) ? editing.audioName : '';
+    $('f-audio-name').textContent = name || 'No voice file';
+    $('f-audio-clear').hidden = !name;
+  }
+
+  $('f-audio').addEventListener('change', () => {
+    const f = $('f-audio').files[0];
+    if (!f) return;
+    if (f.size > 40 * 1024 * 1024) {
+      alert('That file is over 40 MB. Please use a smaller recording.');
+      $('f-audio').value = '';
+      return;
+    }
+    pendingAudio = f;
+    clearAudio = false;
+    renderAudioField();
+  });
+
+  $('f-audio-clear').addEventListener('click', () => {
+    pendingAudio = null;
+    clearAudio = true;
+    $('f-audio').value = '';
+    renderAudioField();
+  });
+
   function openForm(item) {
     editing = item || null;
+    pendingAudio = null;
+    clearAudio = false;
+    $('f-audio').value = '';
+    renderAudioField();
     $('form-title').textContent = editing ? 'Edit Wird' : 'New Wird';
     $('f-delete').style.display = editing ? '' : 'none';
     $('f-goal').value = editing ? (editing.goalDays || 0) : 0;
@@ -1181,7 +1362,7 @@
 
   const newId = () => 'w-' + Date.now().toString(36) + Math.floor(Math.random() * 1e4);
 
-  $('f-save').addEventListener('click', () => {
+  $('f-save').addEventListener('click', async () => {
     const target = Math.min(Math.max(1, Math.round(+$('f-target').value || 1)), 9999);
     const goalDays = Math.min(Math.max(0, Math.round(+$('f-goal').value || 0)), 9999);
     const streakDays = Math.min(Math.max(0, Math.round(+$('f-streak').value || 0)), 398);
@@ -1198,7 +1379,28 @@
     if (remind && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-    applyStreak(editing || wird.items[wird.items.length - 1], streakDays);
+
+    // The recording itself goes to IndexedDB — a multi-megabyte blob would blow
+    // the localStorage quota. The item only carries the filename, which is what
+    // the list badge and the speed button key off.
+    const item = editing || wird.items[wird.items.length - 1];
+    if (clearAudio && item.audioName) {
+      delete item.audioName;
+      delete item.rate;
+      await idbDel(audioKey(item.id));
+    }
+    if (pendingAudio) {
+      if (await idbSet(audioKey(item.id), pendingAudio)) {
+        item.audioName = pendingAudio.name;
+        if (!RATES.includes(+item.rate)) item.rate = 1;
+      } else {
+        alert('Could not save the voice file — the device may be out of storage.');
+      }
+    }
+    pendingAudio = null;
+    clearAudio = false;
+
+    applyStreak(item, streakDays);
     saveWird();
     renderList();
     setView('list');
@@ -1210,6 +1412,7 @@
     if (!confirm('Delete "' + editing.name + '"? Its history is removed too.')) return;
     wird.items = wird.items.filter((i) => i !== editing);
     for (const day of Object.values(wird.progress)) delete day[editing.id];
+    idbDel(audioKey(editing.id));   // don't orphan the recording in IndexedDB
     editing = null;
     saveWird();
     renderList();
@@ -1430,11 +1633,24 @@
   async function idbSet(k, v) {
     try {
       const db = await idbOpen();
-      await new Promise((res) => {
+      return await new Promise((res) => {
         const t = db.transaction('kv', 'readwrite');
         t.objectStore('kv').put(v, k);
+        t.oncomplete = () => res(true);
+        t.onerror = () => res(false);
+        t.onabort = () => res(false);   // running out of quota aborts the transaction
+      });
+    } catch (e) { return false; }
+  }
+  async function idbDel(k) {
+    try {
+      const db = await idbOpen();
+      await new Promise((res) => {
+        const t = db.transaction('kv', 'readwrite');
+        t.objectStore('kv').delete(k);
         t.oncomplete = res;
         t.onerror = res;
+        t.onabort = res;
       });
     } catch (e) {}
   }
