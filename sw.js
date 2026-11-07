@@ -1,4 +1,4 @@
-const CACHE = 'tap-counter-v15';
+const CACHE = 'tap-counter-v16';
 const ASSETS = [
   './',
   './index.html',
@@ -13,7 +13,14 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
+  // cache: 'reload' downloads every file fresh from the server. Without it the
+  // browser may reuse its own HTTP-cached copies (GitHub Pages sends
+  // max-age=600), so an update published within 10 minutes of the phone's last
+  // download got saved under the new version name with the OLD index.html, and
+  // the phone stayed on the old app with no way to notice.
+  e.waitUntil(caches.open(CACHE).then((c) =>
+    c.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' })))
+  ));
   self.skipWaiting();
 });
 
