@@ -13,6 +13,15 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Wird">
+<script>
+  /* apply a saved dark mode before the first paint, so it never flashes cream on open */
+  try {
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.dataset.theme = 'dark';
+      document.querySelector('meta[name="theme-color"]').content = '#000000';
+    }
+  } catch (e) {}
+</script>
 <style>
   @font-face {
     font-family: 'Amiri';
@@ -132,11 +141,21 @@
     margin-top: 2px;
   }
   #date-line { margin-top: 10px; font-size: 14px; color: var(--gold); letter-spacing: 0.06em; text-transform: none; }
-  #settings-btn {
+  #settings-btn, #theme-btn {
     position: absolute;
     top: calc(var(--safe-top) + 18px); right: 16px;
     min-width: 0; font-size: 17px; padding: 7px 12px;
   }
+  #theme-btn { right: auto; left: 16px; }
+  /* the two header buttons are a matching pair */
+  #settings-btn, #theme-btn {
+    width: 44px; height: 44px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  /* moon / sun buttons: inline SVG drawn in the button's gold, sized like the ⚙︎ glyph */
+  .theme-btn { display: inline-flex; align-items: center; justify-content: center; }
+  .theme-btn svg { display: block; width: 1.05em; height: 1.05em; }
+  #read-theme { min-width: 0; padding: 8px 12px; font-size: 15px; align-self: stretch; }
 
   #wird-list {
     position: relative; z-index: 2; flex: 1;
@@ -649,6 +668,89 @@
     border-color: rgba(217, 178, 95, 0.4);
     background: rgba(217, 178, 95, 0.1);
   }
+
+  /* ============ DARK MODE — pure black ============ */
+  /* Switched only by the moon buttons (saved as localStorage 'theme'), never by the
+     phone's own setting. The light look above is untouched. In dark mode the
+     "ivory" token is the soft text colour; every cream surface is overridden below. */
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --green-950: #000;
+    --green-900: #000;
+    --green-800: #141414;
+    --green-700: #1c1c1c;
+    --gold: #b39457;
+    --gold-bright: #c9a75c;
+    --gold-deep: #8c7444;
+    --ivory: #cfc8b8;
+    --ivory-warm: #000;
+    --ink: #cfc8b8;
+    --ink-soft: #857f73;
+    --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23c9a75c' stroke-opacity='0.045'%3E%3Cpath d='M32 2L62 32L32 62L2 32Z'/%3E%3Cpath d='M32 14L50 32L32 50L14 32Z'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3Cpath d='M0 0L8 0M0 0L0 8M64 0L56 0M64 0L64 8M0 64L8 64M0 64L0 56M64 64L56 64M64 64L64 56'/%3E%3C/g%3E%3C/svg%3E");
+  }
+  html[data-theme="dark"] .topbar { border-bottom-color: rgba(255, 255, 255, 0.08); }
+  /* no glows: at night every bit of light counts */
+  html[data-theme="dark"] #view-list .header-ar,
+  html[data-theme="dark"] #read-count,
+  html[data-theme="dark"] #count,
+  html[data-theme="dark"] .running #timer,
+  html[data-theme="dark"] #congrats .c-ar { text-shadow: none; }
+  html[data-theme="dark"] .c-moon::before { box-shadow: 0 0 26px rgba(201, 167, 92, 0.22); }
+
+  /* home list cards */
+  html[data-theme="dark"] .card {
+    background: #0c0c0c;
+    border-color: rgba(201, 167, 92, 0.22);
+    box-shadow: none;
+  }
+  html[data-theme="dark"] .card.done {
+    background: #100e09;
+    border-color: rgba(201, 167, 92, 0.55);
+    box-shadow: none;
+  }
+  html[data-theme="dark"] .card-name,
+  html[data-theme="dark"] .card-count { color: var(--ink); }
+  html[data-theme="dark"] .card.done .card-count { color: #5f9e7c; }
+  html[data-theme="dark"] .card-bar { background: rgba(255, 255, 255, 0.08); }
+  html[data-theme="dark"] .card.done .card-bar i { background: linear-gradient(90deg, #2a6248, #3f8a66); }
+  html[data-theme="dark"] .card-edit:active { color: var(--gold-bright); }
+  html[data-theme="dark"] #add-btn { box-shadow: none; }
+
+  /* reading page */
+  html[data-theme="dark"] #ayah-scroll {
+    background: #000;
+    border-top-color: #3a3122;
+    box-shadow: none;
+  }
+  html[data-theme="dark"] .ayah + .ayah { border-top-color: rgba(255, 255, 255, 0.07); }
+  html[data-theme="dark"] .w {
+    background-image: linear-gradient(rgba(201, 167, 92, 0.28), rgba(201, 167, 92, 0.28));
+  }
+  html[data-theme="dark"] #play-btn,
+  html[data-theme="dark"] #speed-btn,
+  html[data-theme="dark"] #tap-btn { border-color: #3a3122; box-shadow: none; }
+  html[data-theme="dark"] #play-btn.playing,
+  html[data-theme="dark"] #tap-btn.done { border-color: var(--gold-bright); }
+
+  /* form & settings */
+  html[data-theme="dark"] .field input:not([type="range"]),
+  html[data-theme="dark"] .field textarea {
+    background: #0c0c0c;
+    border-color: rgba(201, 167, 92, 0.3);
+  }
+  html[data-theme="dark"] .field input:not([type="range"]):focus,
+  html[data-theme="dark"] .field textarea:focus { border-color: var(--gold); }
+  html[data-theme="dark"] .btn-primary { box-shadow: none; }
+  html[data-theme="dark"] #fs-sample {
+    background: #000;
+    border-color: rgba(201, 167, 92, 0.3);
+  }
+
+  /* bottom tab bar */
+  html[data-theme="dark"] #tabbar {
+    background: rgba(0, 0, 0, 0.95);
+    border-top-color: rgba(201, 167, 92, 0.18);
+  }
 </style>
 </head>
 <body data-view="list">
@@ -659,6 +761,7 @@
     <div class="header-ar">وِرْدِي</div>
     <h1>My Daily Wird</h1>
     <div class="label" id="date-line"></div>
+    <button class="bar-btn theme-btn" id="theme-btn" type="button" aria-label="Dark mode"></button>
     <button class="bar-btn" id="settings-btn" type="button">⚙︎</button>
   </header>
   <div id="wird-list"></div>
@@ -670,6 +773,7 @@
   <div class="topbar">
     <button class="bar-btn" id="read-back" type="button">‹ Back</button>
     <div class="title" id="read-title"></div>
+    <button class="bar-btn theme-btn" id="read-theme" type="button" aria-label="Dark mode"></button>
     <button class="bar-btn" id="read-edit" type="button">Edit</button>
   </div>
   <div id="read-progress" title="Tap to minimize">
@@ -1465,6 +1569,35 @@
     try { localStorage.setItem('sound-on', soundOn ? '1' : '0'); } catch (e) {}
     if (soundOn) beep(880);
   });
+
+  /* ================= DARK MODE ================= */
+  // The <head> script already applied a saved choice before first paint; this
+  // keeps the buttons' icon and the phone's status-bar colour in step with it.
+  const MOON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+    '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  const SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/>' +
+    '<path d="M12 2v2.4M12 19.6V22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M2 12h2.4M19.6 12H22' +
+    'M4.9 19.1l1.7-1.7M17.4 6.6l1.7-1.7"/></svg>';
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  function applyTheme(dark) {
+    if (dark) document.documentElement.dataset.theme = 'dark';
+    else delete document.documentElement.dataset.theme;
+    themeMeta.content = dark ? '#000000' : '#0b3d2e';
+    for (const b of document.querySelectorAll('.theme-btn')) {
+      b.innerHTML = dark ? SUN_SVG : MOON_SVG;
+      b.setAttribute('aria-label', dark ? 'Light mode' : 'Dark mode');
+      b.title = dark ? 'Light mode' : 'Dark mode';
+    }
+  }
+  applyTheme(document.documentElement.dataset.theme === 'dark');
+  for (const b of document.querySelectorAll('.theme-btn')) {
+    b.addEventListener('click', () => {
+      const dark = document.documentElement.dataset.theme !== 'dark';
+      applyTheme(dark);
+      try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) {}
+    });
+  }
 
   /* ================= PROGRESS PANEL MINIMIZE ================= */
   const rp = $('read-progress');

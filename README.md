@@ -22,6 +22,11 @@ Quran verses and adhkar you read a set number of times each day.
 - **Screen stays awake** — while a wird is open the display is held on, so the
   phone never sleeps mid-ayah during auto-reading. The lock is dropped as soon
   as you leave the reading view. Requires an HTTPS (or `localhost`) origin.
+- **Dark mode** — a moon button (home screen, top left, and on the reading
+  screen next to Edit) switches the whole app to pure black with soft grey
+  letters and dimmed gold, for reading at night. Press the sun to switch back.
+  The choice is remembered and applied before the first paint, so the app never
+  flashes cream on open. It does not follow the phone's own dark setting.
 - **Your own recitation** — attach an MP3 to any wird (Edit → *Voice recording*).
   Press ▶ and the voice becomes the clock: the word marker is pinned to the
   audio's own position, so it follows the reciter instead of a fixed words/min.
