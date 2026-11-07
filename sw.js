@@ -1,4 +1,4 @@
-const CACHE = 'tap-counter-v14';
+const CACHE = 'tap-counter-v15';
 const ASSETS = [
   './',
   './index.html',

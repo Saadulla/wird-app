@@ -1058,7 +1058,20 @@
     wakeLock = null;
   }
 
+  /* Phone back gesture. Screens are shown and hidden inside this one page, so on its
+     own the phone sees no history and its back gesture closes the app. While any
+     screen other than the list is open, one extra history entry sits on top: the
+     gesture pops it and the popstate handler (by the form code) goes up one level,
+     like the ‹ Back buttons. Returning to the list by a button drops that entry, so
+     a back gesture on the list still closes the app at once. */
+  let backEntry = false;   // our extra history entry is on top
+  let selfBack = 0;        // history.back() calls we made ourselves: their popstate is ignored
   const setView = (v) => {
+    if (v !== 'list' && !backEntry) {
+      try { history.pushState({ wird: 'sub' }, ''); backEntry = true; } catch (e) {}
+    } else if (v === 'list' && backEntry) {
+      backEntry = false; selfBack++; history.back();
+    }
     document.body.dataset.view = v;
     for (const el of document.querySelectorAll('.view')) el.classList.remove('active');
     $('view-' + v).classList.add('active');
@@ -1523,13 +1536,27 @@
     setView('list');
   });
 
-  $('form-back').addEventListener('click', () => {
+  function leaveForm() {
     if (current && editing === current) {
       openRead(current);
     } else {
       renderList(); setView('list');
     }
+  }
+  $('form-back').addEventListener('click', leaveForm);
+
+  // phone back gesture (see setView): go up one level, exactly like the ‹ Back buttons
+  window.addEventListener('popstate', () => {
+    backEntry = false;
+    if (selfBack > 0) { selfBack--; return; }
+    const v = document.body.dataset.view;
+    if (v === 'form') leaveForm();
+    else if (v === 'read') $('read-back').click();
+    else if (v !== 'list') { renderList(); setView('list'); }
   });
+  // reloaded while an inner screen was open: the app restarts on the list, so drop
+  // the leftover entry, or the first back gesture on the list would do nothing
+  if (history.state && history.state.wird === 'sub') { selfBack++; history.back(); }
   $('add-btn').addEventListener('click', () => { current = null; openForm(null); });
 
   /* ================= SETTINGS ================= */
